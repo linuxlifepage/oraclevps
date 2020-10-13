@@ -1,0 +1,400 @@
+==================================================================
+*Connect to server from SSH KEYS
+
+1) Скачать ключи при установке на свой ПК
+2) Переименовать их и положить в 
+ ~/.ssh/id_rsa_hostname
+ chmod 600 ~/.ssh/id_rsa_hostname
+ssh-add ~/.ssh/id_rsa_hostname
+Так как после перезагрузки придется опять выполнять эту команду, 
+то создаем конфиг:
+ vim ~/.ssh/config
+ И добавить: 
+ Host hostname
+   HostName hostname
+   User git
+   IdentityFile ~/.ssh/id_rsa_hostname
+   IdentitiesOnly yes
+
+   Ввести команду для сброса ssh агента ssh-add -D
+
+  Теперь открываем терминал заново и коннектимся
+  ssh ubuntu@hostname
+
+==================================================================
+*Первоначальная настройка
+===SWAP FILE!===
+sudo swapon -s
+free -h
+fdisk -l
+df -h
+   ЕСЛИ есть файл подкачки, но размер маленький, то сделать это 
+   sudo swapoff /swapfile
+   sudo fallocate -l 4G /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+НО у нас его в 99% не будет, поэтому используем эти команды:  
+fallocate -l 512M /root/swapfile
+ls -lh /root/swapfile
+sudo chmod 600 /root/swapfile
+sudo mkswap /root/swapfile
+sudo swapon /root/swapfile
+sudo swapon -s
+sudo nano /etc/fstab
+/root/swapfile   none    swap    sw    0   0
+
+ sudo apt update
+ sudo apt upgrade
+ sudo apt install nano vim wget git tar unzip tmux ncdu ranger htop -y
+
+*Открываем порты 80/443
+ 0) Открыть порты в политике фаервола в Oracle
+ Сети-Виртуальные облачные сети-VirtualCloudNetwork-20191010-2116-Сведения о списках безопасности-Название списка Вашей безопасности (SecurityList)
+ 1)sudo vim /etc/iptables/rules.v4
+Удаляем ВСЕ строки с port 80 (~ 4 строки)!!!
+Добавляем 2 строки перед портом 22
+-A INPUT -p tcp -m tcp --dport 443 -m state --state NEW -j ACCEPT
+-A INPUT -p tcp -m tcp --dport 80 -m state --state NEW -j ACCEPT
+Сохраняем&Выходим
+2)  Обнуляем правила
+    sudo iptables -P INPUT ACCEPT
+ 	sudo iptables -P OUTPUT ACCEPT
+	sudo iptables -P FORWARD ACCEPT
+ 	sudo iptables -F
+3) Перезагружаемся для восстановления правил из /etc/iptables/rules.v4
+sudo reboot
+
+===================================================================
+*Установке веб-сервера LEMP
+
+sudo apt update
+sudo apt upgrade
+sudo apt install nano vim wget git
+
+1) Установка веб-сервера Nginx
+sudo apt-get install nginx-extras
+sudo chmod -R 0775 /var/www/html/
+sudo chown -R www-data:www-data /var/www/html/
+
+2) Меняем конфиг вашего hostname 
+sudo vim /etc/nginx/sites-available
+
+ server {
+  listen 80;
+  listen [::]:80;
+  server_name _;
+  root /var/www/html/;
+  index index.php index.html index.htm index.nginx-debian.html;
+
+  location / {
+    try_files $uri $uri/ /index.php;
+  }
+
+  location ~ \.php$ {
+    fastcgi_pass unix:/run/php/php7.4-fpm.sock;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    include fastcgi_params;
+    include snippets/fastcgi-php.conf;
+  }
+
+ # A long browser cache lifetime can speed up repeat visits to your page
+  location ~* \.(jpg|jpeg|gif|png|webp|svg|woff|woff2|ttf|css|js|ico|xml)$ {
+       access_log        off;
+       log_not_found     off;
+       expires           360d;
+  }
+
+  # disable access to hidden files
+  location ~ /\.ht {
+      access_log off;
+      log_not_found off;
+      deny all;
+  }
+}
+
+3) sudo systemctl reload nginx
+   *** sudo service ubuntu restart  - НА УБУНТУ 16
+ПРОВЕРЯЕМ РАБОТУ веб-сервера на IP
+
+4) Полезные команды
+
+Команды при ошибке установки nginx/apache
+sudo apt-get install –f
+
+sudo systemctl stop nginx
+sudo systemctl stop apache
+sudo systemctl disable apache
+sudo systemctl disable nginx
+sudo apt-get remove --purge nginx nginx-full nginx-common nginx-extras apache2
+sudo dpkg --configure -a
+
+2.1 Установка MariaDB
+1) sudo apt install mariadb-server mariadb-client
+2) sudo systemctl start mariadb    (sudo service mysql start  - для ubuntu 16)
+3) sudo systemctl enable mariadb   (не нужно для ubuntu 16)
+4) sudo mysql_secure_installation   (Скипт безопасности)
+   Первый запрос пароля для root пропускаем
+   Второй вводим НАДЕЖНЫЙ ПАРОЛЬ
+   Дальше везде ENTER:
+   -Анонимные пользователи - y
+   -Выключить удаленное подключение к базе - y
+   -Удалить тестовые базы? - y
+   -Перезагрузить доступы? - y
+5) Меняем конфиг для слабой машины
+[mysqld]
+performance_schema = off
+key_buffer_size = 64M
+query_cache_size = 32M
+query-cache-limit = 32M
+tmp_table_size = 16M
+innodb_buffer_pool_size = 100M
+innodb_log_buffer_size = 64M
+max_connections = 25
+sort_buffer_size = 512M
+read_buffer_size = 256K
+read_rnd_buffer_size = 512K
+join_buffer_size = 128K
+thread_stack = 196K
+
+systemctl restart mariadb  (service mysql restart) ДЛЯ УБУНТУ 16
+systemctl status mariadb   (service mysql status)
+
+3. Установка PHP
+sudo apt install software-properties-common
+sudo add-apt-repository ppa:ondrej/php
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E5267A6C
+sudo apt update
+sudo apt install php7.4 php7.4-fpm php7.4-mysql php-common php7.4-cli php7.4-common php7.4-json php7.4-opcache php7.4-readline php7.4-mbstring php7.4-xml php7.4-gd php7.4-curl -y
+
+
+sudo systemctl start php7.4-fpm   (service php7.4-fpm start   -ДЛЯ УБУНТУ 16) 
+sudo systemctl enable php7.4-fpm
+sudo systemctl status php7.4-fpm
+
+
+========================================================================
+Добавим запись типа A для своего поддомена
+ncloud.linuxlife.page A ВАШ_IP_АДРЕС
+
+
+========================================================================
+Установка NextCloud
+1) cd /tmp
+wget https://download.nextcloud.com/server/releases/nextcloud-19.0.3.zip
+mkdir /var/www/nextcloud.example.com
+2) sudo unzip nextcloud-19.0.3.zip
+   sudo mv nextcloud /var/www/nextcloud.example.com
+sudo chmod -R 0775 /var/www/nextcloud.example.com
+sudo chown -R www-data:www-data /var/www/nextcloud.example.com
+3) Создаем базу данных nextcloud и пользователя nextcloud
+sudo mysql -u root
+CREATE DATABASE nextcloud;
+SHOW DATABASES;
+CREATE USER nextcloud@localhost IDENTIFIED BY 'YOUR_PASSWORD';
+SELECT User FROM mysql.user;                                //смотрим в списке
+GRANT ALL PRIVILEGES ON nextcloud.* TO nextcloud@localhost;
+FLUSH PRIVILEGES;
+SHOW GRANTS FOR nextcloud@localhost;
+
+4) Создаем конфиг ДЛЯ СВОЕГО хоста для nginx
+sudo vim /etc/nginx/sites-available/nextcloud.example.com
+sudo ln -s /etc/nginx/sites-available/nextcloud.example.com /etc/nginx/sites-enabled/
+
+И заменим nextcloud.example.com на свое имя хоста
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name nextcloud.example.com;
+
+    # Add headers to serve security related headers
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+    add_header X-Robots-Tag none;
+    add_header X-Download-Options noopen;
+    add_header X-Permitted-Cross-Domain-Policies none;
+    add_header Referrer-Policy no-referrer;
+
+    #I found this header is needed on Ubuntu, but not on Arch Linux. 
+    add_header X-Frame-Options "SAMEORIGIN";
+
+    # Path to the root of your installation
+    root /var/www/nextcloud.example.com/;
+
+    access_log /var/log/nginx/nextcloud.example.com.access;
+    error_log /var/log/nginx/nextcloud.example.com.error;
+
+    location = /robots.txt {
+        allow all;
+        log_not_found off;
+        access_log off;
+    }
+
+    # The following 2 rules are only needed for the user_webfinger app.
+    # Uncomment it if you're planning to use this app.
+    #rewrite ^/.well-known/host-meta /public.php?service=host-meta last;
+    #rewrite ^/.well-known/host-meta.json /public.php?service=host-meta-json
+    # last;
+
+    location = /.well-known/carddav {
+        return 301 $scheme://$host/remote.php/dav;
+    }
+    location = /.well-known/caldav {
+       return 301 $scheme://$host/remote.php/dav;
+    }
+
+    location ~ /.well-known/acme-challenge {
+      allow all;
+    }
+
+    # set max upload size
+    client_max_body_size 512M;
+    fastcgi_buffers 64 4K;
+
+    # Disable gzip to avoid the removal of the ETag header
+    gzip off;
+
+    # Uncomment if your server is build with the ngx_pagespeed module
+    # This module is currently not supported.
+    #pagespeed off;
+
+    error_page 403 /core/templates/403.php;
+    error_page 404 /core/templates/404.php;
+
+    location / {
+       rewrite ^ /index.php;
+    }
+
+    location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)/ {
+       deny all;
+    }
+    location ~ ^/(?:\.|autotest|occ|issue|indie|db_|console) {
+       deny all;
+     }
+
+    location ~ ^/(?:index|remote|public|cron|core/ajax/update|status|ocs/v[12]|updater/.+|ocs-provider/.+|core/templates/40[34])\.php(?:$|/) {
+       include fastcgi_params;
+       fastcgi_split_path_info ^(.+\.php)(/.*)$;
+       try_files $fastcgi_script_name =404;
+       fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+       fastcgi_param PATH_INFO $fastcgi_path_info;
+       #Avoid sending the security headers twice
+       fastcgi_param modHeadersAvailable true;
+       fastcgi_param front_controller_active true;
+       fastcgi_pass unix:/run/php/php7.4-fpm.sock;
+       fastcgi_intercept_errors on;
+       fastcgi_request_buffering off;
+    }
+
+    location ~ ^/(?:updater|ocs-provider)(?:$|/) {
+       try_files $uri/ =404;
+       index index.php;
+    }
+
+    # Adding the cache control header for js and css files
+    # Make sure it is BELOW the PHP block
+    location ~* \.(?:css|js)$ {
+        try_files $uri /index.php$uri$is_args$args;
+        add_header Cache-Control "public, max-age=7200";
+        # Add headers to serve security related headers (It is intended to
+        # have those duplicated to the ones above)
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+        add_header X-Robots-Tag none;
+        add_header X-Download-Options noopen;
+        add_header X-Permitted-Cross-Domain-Policies none;
+        add_header Referrer-Policy no-referrer;
+        # Optional: Don't log access to assets
+        access_log off;
+   }
+
+   location ~* \.(?:svg|gif|png|html|ttf|woff|ico|jpg|jpeg)$ {
+        try_files $uri /index.php$uri$is_args$args;
+        # Optional: Don't log access to other assets
+        access_log off;
+   }
+}
+
+sudo systemctl reload nginx
+
+5) Доставляем модули PHP
+sudo apt install php-imagick php7.4-common php7.4-mysql php7.4-fpm php7.4-gd php7.4-json php7.4-curl  php7.4-zip php7.4-xml php7.4-mbstring php7.4-bz2 php7.4-intl
+
+========================================================================
+Включаем HTTPS
+sudo add-apt-repository ppa:certbot/certbot
+sudo apt update
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx --agree-tos --redirect --staple-ocsp --email you@example.com -d nextcloud.example.com
+
+Включим для безопасноти HSTS
+sudo vim /etc/nginx/sites-available/nextcloud.example.com.conf
+
+и добавим строку после ssl_dhparam
+add_header Strict-Transport-Security "max-age=31536000" always;
+
+и добавим http2 для скорости загрузки в конфиг
+*ищем listen 443 и добавляем http2 как в строке ниже:
+listen 443 ssl http2; # managed by Certbot
+
+
+Затестируем конфиг 
+sudo nginx -t
+sudo systemctl reload nginx
+=========================================================================
+Настройка Redis Cache
+
+sudo apt install redis-server
+sudo systemctl status redis
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
+
+***
+ОБЯЗАТЕЛЬНО. Определим квоту использования памяти
+sudo vim /etc/redis/redis.conf
+sudo vim /etc/redis-server.conf
+maxmemory 128mb
+maxmemory-policy allkeys-lru
+
+***
+
+Установим дополнение для php
+sudo apt install php-redis
+Проверим php --ri redis
+Если не включено то sudo phpenmod redis
+
+
+Добавим в конфиг НК /var/www/nextcloud.example.com/config/config.php
+перед конечной строкой с );
+
+'memcache.distributed' => '\OC\Memcache\Redis', 
+'memcache.local' => '\OC\Memcache\Redis', 
+'memcache.locking' => '\OC\Memcache\Redis', 
+'redis'=> array ( 
+     'host'=>'localhost', 
+     'port'=> 6379, 
+     ),
+
+sudo systemctl restart nginx php7.4-fpm
+
+==========================================================================
+
+СТАВИМ OPENVPN
+
+ДЛЯ UBUNTU 18 и младше  wget https://git.io/vpn -O openvpn-ubuntu-install.sh
+ДЛЯ UBUNTU 16 curl -O https://raw.githubusercontent.com/angristan/openvpn-install/master/openvpn-install.sh
+
+//Проверить скрипт
+vim openvpn-ubuntu-install.sh
+
+chmod -v +x openvpn-ubuntu-install.sh
+sudo bash openvpn-ubuntu-install.sh
+sudo systemctl stop openvpn-server@server.service
+sudo systemctl start openvpn-server@server.service
+sudo systemctl restart openvpn-server@server.service
+sudo systemctl status openvpn-server@server.service
+
+
+==========================================================================
+
+
