@@ -141,6 +141,7 @@ sudo dpkg --configure -a
    -Удалить тестовые базы? - y
    -Перезагрузить доступы? - y
 5) Меняем конфиг для слабой машины
+sudo vim /etc/mysql/conf.d/mysql.cnf
 [mysqld]
 performance_schema = off
 key_buffer_size = 64M
