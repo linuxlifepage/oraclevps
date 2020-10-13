@@ -77,7 +77,7 @@ sudo chmod -R 0775 /var/www/html/
 sudo chown -R www-data:www-data /var/www/html/
 
 2) Меняем конфиг вашего hostname 
-sudo vim /etc/nginx/sites-available
+sudo vim /etc/nginx/sites-available/default
 
  server {
   listen 80;
