@@ -199,7 +199,6 @@ SHOW GRANTS FOR nextcloud@localhost;
 
 4) Создаем конфиг ДЛЯ СВОЕГО хоста для nginx
 sudo vim /etc/nginx/sites-available/nextcloud.example.com
-sudo ln -s /etc/nginx/sites-available/nextcloud.example.com /etc/nginx/sites-enabled/
 
 И заменим nextcloud.example.com на свое имя хоста
 
@@ -316,6 +315,9 @@ server {
    }
 }
 
+4.1) Далее создадим сиволическую ссылку
+sudo ln -s /etc/nginx/sites-available/nextcloud.example.com /etc/nginx/sites-enabled/
+4.2) Перезагрузим nginx
 sudo systemctl reload nginx
 
 5) Доставляем модули PHP
@@ -323,7 +325,7 @@ sudo apt install php-imagick php7.4-common php7.4-mysql php7.4-fpm php7.4-gd php
 
 ========================================================================
 Включаем HTTPS
-sudo add-apt-repository ppa:certbot/certbot
+sudo apt-add-repository -r ppa:certbot/certbot
 sudo apt update
 sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx --agree-tos --redirect --staple-ocsp --email you@example.com -d nextcloud.example.com
